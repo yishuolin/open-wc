@@ -14,31 +14,31 @@ When reviewing software that you've maybe not used a lot of or are maybe interes
 
 This is what I keep coming back to when people say things like "X isn't as good as Y" when "X" is a way to build web components ([of which there are many](https://webcomponents.dev/blog/all-the-ways-to-make-a-web-component/)) and "Y" is a JS framework. Before you fill in the actual names on either side of the equation the differences in situation is huge:
 
-- JS frameworks often want to own most or all of a page, whereas a web component is a single custom element on an otherwise large and diverse DOM tree.
+- JS frameworks often want to own most or all of a page, whereas a web component is a single custom element on an potentially large and diverse DOM tree.
 - Functional JS frameworks often hide much of that ownership from view to both the benefit (less code) and expense (less flexibility) of a developer.
 - JS Frameworks, often not being directly tied to the DOM have the ability to make a wider number of JS concepts look to be a part of their purview than DOM-based web components.
 - Web components being a DOM element can interact with their position in the DOM in the ways you'd otherwise need to bend over backward to do in a framework.
 - JS frameworks often ship a lot of JS down the wire that may or may not be required by your application or component regardless of whether the framework author has decided to give you the ability to manage how much of that code makes it into your production build or not.
-- Web components, as JS classes, are already a container for state while a functional JS framework needs to synthesize that concept via custom code or mimic that via state management libraries.
-- Web components are portable to just about any context in which you'd build web UI while JS frameworks generally require that any code you'd like to share live in an app context run by the same JS framework.
-- and, much, much more.
+- Since web components are JS classes, they're already containers for state, while functional JS framework components need to synthesize that concept via custom code or mimic it via state management libraries.
+- Web components are portable to just about any context in which you'd build web UI, while JS frameworks require your components to run in an app built with the same framework (unless or course, they allow you to export web components).
+- and, many, many more.
 
-Some or all of these points could be seen as being for or against either side of the conversation. Many of these could subsequently switch sides as you subtly alter the context in which the code in question shifts. Too often a review that fails to take this into account births a half-baked, often hypercritical, review of using one in place of the other.
+Some or all of these points could be seen as being for or against either side of the conversation. Many of these could switch from pro to con depending on the particular use case. Too often, reviews that fail to take that into account lead to half-baked, often hypercritical takes.
 
-With this in mind, I wanted to go through some concepts that might support people making a healthy decision as to whether a LitElement based web component might be right for them or a project that they're working on. This isn't really a "how-to", though I've got some (slightly) dated version of that available in my ["Not Another To-Do App" series](https://dev.to/westbrook/not-another-to-do-app-2kj9). This is more of a, "you might want to know about these techniques" as they're not exact ports from another context (particularly functional JS frameworks), and being able to judge the difference from a place of knowledge might prove useful to you.
+With that in mind, I want to go over some concepts that support healthier decision-making when teams evaluate LitElement for their projects. This isn't really a "how-to", though I've got some (slightly) dated version of that available in my ["Not Another To-Do App" series](https://dev.to/westbrook/not-another-to-do-app-2kj9). This is more of a "good to know" guide, as these concepts aren't all exact ports from JS framework contexts. I hope the ability to judge the differences from a place of knowledge proves useful to you.
 
 ---
 
 ## Default Values
 
-If you'd like to define default values for a property on a LitElement based custom element, there are a number of ways that you could do this. While some do require management across the entire element class, we'll ignore those today as there are a number of options that do not require such work.
+There are a number of ways to define default values for a property on a LitElement, While some do require management across the entire element class, we'll ignore those today as there are a number of options that do not require such work.
 
-First off, there's a very direct comparison between LitElement and a functional approach to UI development where you could consider the `render()` method of a LitElement as an almost 1 to 1 conversion from the functional definitions found in other offerings. In this way, you could assume `render()` is the only entry into your properties and leverage your fallbacks like so:
+First off, LitElement's `render()` method of a LitElement is (from the user's perspective) an almost 1 to 1 conversion from the functional definitions found in other offerings. In this way, you could treat `render()` as the only entry into your properties and define fallbacks at the top of your render function's body like so:
 
 ```js
 render() {
   const closeDelay = this.closeDelay ?? 300;
-  ...
+  return html`<x-dialog delay=${closeDelay}>Thank you!</x-dialog>`;
 }
 ```
 
@@ -133,7 +133,7 @@ In this way, you can also manage required properties/attributes. No, it doesn't 
 
 ## Event management
 
-Event listeners add on `this` directly in a custom element DO NOT need to be cleaned up when disconnected from the `document`. Once all references to the element are released, the same garbage collection that cleans up the element itself will clean up the events bound to it. What's more, when binding events to `this`, you don't need to bind the method, so you can call a class method directly without any `.bind(this)` or `() => {}` whatsoever.
+Event listeners added directly on `this` in a custom element _do not_ need to be cleaned up when disconnected from the `document`. Once all references to the element are released, the same garbage collection that cleans up the element itself will clean up the events bound to it. What's more, when calling `addEventListener` on `this`, the method's `this` reference automatically reverts to the instance. You don't need to bind the method, so you can call a class method directly without any `.bind(this)` or class field arrow-functions.
 
 ```js
 @customElement('menu-trigger')
@@ -143,7 +143,7 @@ export class MenuTrigger extends LitElement {
 
   public willUpdate(changedProperties: PropertyValues<this>): void {
     if (changedProperties.has('trigger') {
-      this.removeEventListener(changedPeroperties.get('trigger'), this.eventHandler);
+      this.removeEventListener(changedProperties.get('trigger'), this.eventHandler);
       this.addEventListener(this.trigger, this.eventHandler);
     }
   }
@@ -154,7 +154,7 @@ export class MenuTrigger extends LitElement {
 }
 ```
 
-Events are even easier if you know the name of the event you're wanting to listen for will be the same throughout the lifecycle of your application. With that knowledge you can listen just once without needing to add/remove the listener based on even name changes overtime:
+Events are even easier if you know the name of the event you're wanting to listen for will be the same throughout the lifecycle of your application. With that knowledge you can listen just once without needing to add/remove the listener based on even name changes over time:
 
 ```js
 @customElement('menu-trigger')
@@ -174,7 +174,7 @@ Done and done!
 
 ## styleMap usage
 
-Contrary to what you might read in the documentation site (PRs are incoming to correct, so you may miss it altogether!), `styleMap()` does accept `[name: string]: string | undefined | null;` which allows you to leverage `undefined` to prevent a property from being added to the style of an element, e.g.:
+Lit's `styleMap()` directive helps when setting the `style` attribute on HTML elements from JavaScript. It accepts an object with css-property keys and string, `undefined`, or `null` values. This means you can prevent a CSS property from being added to the element by passing `null` or `undefined` as the value, e.g.:
 
 ```js
 import {styleMap} from 'lit/directives/style-map.js';
@@ -195,7 +195,7 @@ import {styleMap} from 'lit/directives/style-map.js';
 
 [Check it out here.](https://lit.dev/playground/#project=W3sibmFtZSI6InNpbXBsZS1ncmVldGluZy50cyIsImNvbnRlbnQiOiJpbXBvcnQge2h0bWwsIGNzcywgTGl0RWxlbWVudH0gZnJvbSAnbGl0JztcbmltcG9ydCB7Y3VzdG9tRWxlbWVudCwgcHJvcGVydHl9IGZyb20gJ2xpdC9kZWNvcmF0b3JzLmpzJztcbmltcG9ydCB7c3R5bGVNYXB9IGZyb20gJ2xpdC9kaXJlY3RpdmVzL3N0eWxlLW1hcC5qcyc7XG5cbkBjdXN0b21FbGVtZW50KCdzaW1wbGUtZ3JlZXRpbmcnKVxuZXhwb3J0IGNsYXNzIFNpbXBsZUdyZWV0aW5nIGV4dGVuZHMgTGl0RWxlbWVudCB7XG4gIHN0YXRpYyBzdHlsZXMgPSBjc3NgcCB7IGNvbG9yOiBibHVlIH1gO1xuXG4gIEBwcm9wZXJ0eSgpXG4gIG5hbWUgPSAnU29tZWJvZHknO1xuXG4gIHJlbmRlcigpIHtcbiAgICByZXR1cm4gaHRtbGBcbiAgICAgICAgPHBcbiAgICAgICAgc3R5bGU9JHtzdHlsZU1hcCh7XG4gICAgICAgICAgYm9yZGVyOiAnMXB4IHNvbGlkJyxcbiAgICAgICAgICB3aWR0aDogJzIwMHB4JyxcbiAgICAgICAgICBmbG9hdDogdW5kZWZpbmVkLFxuICAgICAgICAgIG1hcmdpbjogMTAsXG4gICAgICAgIH0pfVxuICAgICAgICA-SGVsbG8sICR7dGhpcy5uYW1lfSE8L3A-YDtcbiAgfVxufVxuIn0seyJuYW1lIjoiaW5kZXguaHRtbCIsImNvbnRlbnQiOiI8IURPQ1RZUEUgaHRtbD5cbjxoZWFkPlxuICA8c2NyaXB0IHR5cGU9XCJtb2R1bGVcIiBzcmM9XCIuL3NpbXBsZS1ncmVldGluZy5qc1wiPjwvc2NyaXB0PlxuPC9oZWFkPlxuPGJvZHk-XG4gIDxzaW1wbGUtZ3JlZXRpbmcgbmFtZT1cIldvcmxkXCI-PC9zaW1wbGUtZ3JlZXRpbmc-XG48L2JvZHk-XG4ifSx7Im5hbWUiOiJwYWNrYWdlLmpzb24iLCJjb250ZW50Ijoie1xuICBcImRlcGVuZGVuY2llc1wiOiB7XG4gICAgXCJsaXRcIjogXCJeMi4wLjAtcmMuMlwiLFxuICAgIFwiQGxpdC9yZWFjdGl2ZS1lbGVtZW50XCI6IFwiXjEuMC4wLXJjLjJcIixcbiAgICBcImxpdC1lbGVtZW50XCI6IFwiXjMuMC4wLXJjLjJcIixcbiAgICBcImxpdC1odG1sXCI6IFwiXjIuMC4wLXJjLjNcIlxuICB9XG59IiwiaGlkZGVuIjp0cnVlfV0)
 
-You aren't able to use numbers directly, no. However, the foot gun of lacking clarity in your code that unearths makes preventing this input a pretty good idea. In a world where `px` is just one of many units that a CSS property could accept (`%`, `vh`, `vwmax`, `pt`, `em`, `rem`, `pt`, `pc`, ad (almost) infinitum) being explicit with your code with not only help your consumers, but it'll help your future self maintain the components that you create. On top of that, there are numbers that you'll eventually want to apply to your styles that won't beg for the application of a unit at all:
+The current version of Lit's styleMap excludes numbers as values. You might expect Lit to automatically convert numbers to `px` values, but on second thought that isn't actually what you'd want. In CSS, where `px` is just one of many units that a numeric CSS property could accept (`%`, `vh`, `vwmax`, `pt`, `em`, `rem`, `pt`, `pc`, _ad infinitum_), there's no way for Lit to know or even assume what kind of number you're using. On top of that, you might want to apply unit-less numbers directly to your styles:
 
 <figure>
 
@@ -208,7 +208,7 @@ class XL extends LitElement {
   `;
   @property({ type: Number }) hue = 0;
   render() {
-    return html` <output style=${styleMap({ '--hue': this.hue })}></output> `;
+    return html` <output style=${styleMap({ '--hue': this.hue.toString() })}></output> `;
   }
 }
 ```
@@ -217,6 +217,8 @@ class XL extends LitElement {
 Thanks @bennypowers for the code sample here.
 </figcaption>
 </figure>
+
+Defaulting numbers to `px` would be a foot-gun. Instead, Lit encourages you to be explicit with your CSS code. Doing so not only helps your consumers, but your teammates and future self as well when it comes time to maintain the components that you create.
 
 ---
 
